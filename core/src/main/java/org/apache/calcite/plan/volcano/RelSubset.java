@@ -16,6 +16,19 @@
  */
 package org.apache.calcite.plan.volcano;
 
+// qoop - begin import block
+import org.apache.calcite.rel.core.Join;
+import org.apache.calcite.rel.core.Project;
+import org.apache.calcite.rel.core.Sort;
+import org.apache.calcite.rel.core.TableScan;
+import org.apache.calcite.sql.SqlExplainLevel;
+import org.apache.calcite.plan.volcano.AbstractConverter;
+import com.google.common.collect.Sets;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+// end import block
+
 import org.apache.calcite.linq4j.Linq4j;
 import org.apache.calcite.linq4j.function.Predicate1;
 import org.apache.calcite.plan.RelOptCluster;
@@ -68,6 +81,9 @@ public class RelSubset extends AbstractRelNode {
   //~ Static fields/initializers ---------------------------------------------
 
   private static final Logger LOGGER = CalciteTrace.getPlannerTracer();
+
+  // qoop
+  private static int MAX_PROJECT_DEPTH = 20;
 
   //~ Instance fields --------------------------------------------------------
 
@@ -303,6 +319,34 @@ public class RelSubset extends AbstractRelNode {
     return cheapest;
   }
 
+  // qoop
+  /**
+   * @param planner
+   * @param n
+   * @return
+   */
+  Set<RelNode> buildAllPlans(VolcanoPlanner planner) {
+
+    OrderedPlanReplacer replacer1 = new OrderedPlanReplacer(planner);
+    // LOGGER.log(Level.INFO, "QOOP: Total Rels = " + replacer1.countRels(this));
+	// LOGGER.log(Level.INFO, "QOOP: Total plans = " + replacer1.getTotalPlans(this));
+    System.out.println("QOOP: Total Rels = " + replacer1.countRels(this));
+    System.out.println("QOOP: Total Plans = " + replacer1.getTotalPlans(this));
+    System.out.flush();
+
+    final Set<RelNode> allplans = replacer1.visitAll(this);
+
+    if (planner.listener != null) {
+      RelOptListener.RelChosenEvent event =
+          new RelOptListener.RelChosenEvent(
+              planner,
+              null);
+      planner.listener.relChosen(event);
+    }
+
+    return allplans;
+  }
+
   /**
    * Checks whether a relexp has made its subset cheaper, and if it so,
    * recursively checks whether that subset's parents have gotten cheaper.
@@ -470,11 +514,208 @@ public class RelSubset extends AbstractRelNode {
       }
       if (!inputs.equals(oldInputs)) {
         final RelNode pOld = p;
+        System.out.println(RelOptUtil.toString(p, SqlExplainLevel.ALL_ATTRIBUTES));
         p = p.copy(p.getTraitSet(), inputs);
         planner.provenanceMap.put(
             p, new VolcanoPlanner.DirectProvenance(pOld));
       }
       return p;
+    }
+  }
+
+  /**
+   *
+   */
+  static class OrderedPlanReplacer {
+    VolcanoPlanner planner;
+
+    /**
+     * Constructor. Focusses on a rank
+     *
+     * @param planner
+     * @param n
+     */
+    OrderedPlanReplacer(VolcanoPlanner planner) {
+      super();
+      this.planner = planner;
+    }
+
+    /**
+     * @param root
+     * @return The total number of RelSubsets in the lattice.
+     */
+    public int countRels(RelNode root) {
+      Set<RelNode> allrels = gatherRels(root, new HashSet<RelNode>());
+      int tsnum =0, projnum=0,joinnum=0, sortnum=0, aggnum=0;
+
+      Map<String, Integer> opcount = new HashMap<String, Integer>();
+      for(RelNode node: allrels) {
+        if(!opcount.containsKey(node.getRelTypeName())) {
+          opcount.put(node.getRelTypeName(), 0);
+        }
+        int tmp = opcount.get(node.getRelTypeName());
+        opcount.put(node.getRelTypeName(), ++tmp);
+      }
+      for(String key: opcount.keySet()) {
+        System.out.println(key + " : " + opcount.get(key));
+      }
+      return allrels.size();
+    }
+
+
+    private Set<RelNode> gatherRels (RelNode curr, Set<RelNode> visited) {
+      Set<RelNode> leads = new HashSet<RelNode>();
+      if(curr instanceof RelSubset) {
+        RelSubset subset = (RelSubset) curr;
+        for(RelNode node: subset.getRels()) {
+          leads.add(node);
+        }
+      } else {
+        leads.add(curr);
+      }
+
+      for(RelNode node: leads) {
+        if(visited.contains(node))
+          continue;
+        visited.add(node);
+        for(RelNode input: node.getInputs()) {
+          visited.addAll(gatherRels(input, visited));
+        }
+      }
+      return visited;
+    }
+
+
+    /**
+     * @param root
+     * @return An upper bound on the total number of plans.
+     */
+    public long getTotalPlans(RelNode root) {
+      return traverse(root, new HashSet<RelNode>(), 0);
+    }
+
+    private long traverse(RelNode root, final Set<RelNode> visited, final int project_depth) {
+      if(project_depth == MAX_PROJECT_DEPTH)
+        return 0;
+
+      List<RelNode> leads = new ArrayList<RelNode>();
+      if(root instanceof RelSubset) {
+        for(RelNode node: ((RelSubset)root).getRels()) {
+          leads.add(node);
+        }
+      } else {
+        leads.add(root);
+      }
+
+      if(leads.size() == 0) {
+        System.out.println("ERROR: leads is zero in traverse");
+      }
+
+      long count = 0;
+      for (RelNode node: leads) {
+        if(node instanceof TableScan) {
+          count += 1;
+//          System.out.println("TableScan = " + RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
+        } else if(visited.contains(node)) {
+          continue; // do not pursue this lead
+        }
+        else {
+          int new_project_depth = project_depth;
+
+          if(node instanceof Project
+//              && ((Project)node).getPermutation() != null
+              )
+            new_project_depth += 1;
+          else
+            new_project_depth = 0;
+
+          List<RelNode> inputs = node.getInputs();
+          if(inputs.size() == 0) {
+            System.out.println("ERROR: inputs is zero in traverse");
+          } else {
+            // create a duplicate of the current visited state
+            Set<RelNode> duplicate = new HashSet<RelNode>(visited);
+            duplicate.add(node);
+            long lcount = 1;
+            for(RelNode input: node.getInputs()) {
+              lcount *= traverse(input, duplicate, new_project_depth);
+            }
+            count += lcount;
+          }
+        }
+      }
+      return count;
+    }
+
+
+    public Set<RelNode> visitAll(RelNode root) {
+      System.out.println("Begin exhaustive search for all query plans.");
+      return exhaustiveSearch(root, new HashSet<RelNode>(), 0);
+    }
+
+
+    public Set<RelNode> exhaustiveSearch(RelNode curr, final Set<RelNode> visited,
+        final int project_depth) {
+      Set<RelNode> retval = new HashSet<RelNode>();
+      if(project_depth == MAX_PROJECT_DEPTH)
+        return retval;
+
+      List<RelNode> leads = new ArrayList<RelNode>();
+      if(curr instanceof RelSubset) {
+        for(RelNode node: ((RelSubset)curr).getRels()) {
+          leads.add(node);
+        }
+      } else {
+        leads.add(curr);
+      }
+
+      for (RelNode node: leads) { // each lead can have multiple ways of being realized
+
+        if(visited.contains(node) || node instanceof AbstractConverter) {
+          continue; // do not pursue further
+        }
+
+        Set<RelNode> duplicate = new HashSet<RelNode>(visited);
+        duplicate.add(node);
+        // pursue this node and find different ways in which this node can be
+        // realized
+
+        int new_project_depth = project_depth;
+        if(node instanceof Project)
+          new_project_depth += 1;
+        else
+          new_project_depth = 0;
+
+        List<RelNode> oldInputs = node.getInputs();
+        // Each input can be realized in multiple ways, thus the different
+        // realizations of a node is obtained as the Cartesian product of
+        // number of ways in which each input can be realized
+
+        List<Set<RelNode>> oldInputRealizations = new ArrayList<Set<RelNode>>();
+        for(RelNode old: oldInputs) {
+          oldInputRealizations.add(exhaustiveSearch(old, duplicate, new_project_depth));
+        }
+        // now create the Cartesian product set
+        Set<List<RelNode>> cart_product
+          = Sets.cartesianProduct(oldInputRealizations);
+
+        for(List<RelNode> candidate : cart_product) {
+          if(!candidate.equals(oldInputs)) {
+            // System.out.println(RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
+            // if (node instanceof AbstractConverter)
+                // System.out.println("Size of Candidate set: " + candidate.size());
+            RelNode new_node = node.copy(node.getTraitSet(), candidate);
+            // XXX it was not needed to recompute digest
+            // new_node.recomputeDigest();
+            planner.provenanceMap.put(new_node,
+                new VolcanoPlanner.DirectProvenance(node));
+            retval.add(new_node);
+          } else {
+            retval.add(node);
+          }
+        }
+      }
+      return retval;
     }
   }
 }

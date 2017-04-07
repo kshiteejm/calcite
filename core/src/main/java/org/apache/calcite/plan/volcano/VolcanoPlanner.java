@@ -16,6 +16,11 @@
  */
 package org.apache.calcite.plan.volcano;
 
+// qoop - begin import block
+import java.util.SortedMap;
+import java.util.TreeMap;
+// end import block
+
 import org.apache.calcite.avatica.util.Spaces;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.linq4j.tree.Expressions;
@@ -759,7 +764,8 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
    * @return the most efficient RelNode tree found for implementing the given
    * query
    */
-  public RelNode findBestExp() {
+  // qoop
+  private void createLattice() {
     ensureRootConverters();
     useApplicableMaterializations();
     int cumulativeTicks = 0;
@@ -839,6 +845,12 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
       pw.flush();
       LOGGER.finer(sw.toString());
     }
+  }
+
+  // qoop
+  public RelNode findBestExp() {
+    createLattice();
+
     RelNode cheapest = root.buildCheapestPlan(this);
     if (LOGGER.isLoggable(Level.FINE)) {
       LOGGER.fine(
@@ -848,7 +860,63 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
       LOGGER.fine("Provenance:\n"
           + provenance(cheapest));
     }
-    return cheapest;
+    System.out.println(RelOptUtil.toString(cheapest, SqlExplainLevel.ALL_ATTRIBUTES));
+
+    return cheapest; 
+  }
+
+  // qoop
+  public SortedMap<Integer, RelNode> findAllExp(boolean only_distinct) {
+    createLattice();
+    System.out.println("QOOP: Created the lattice");
+    Set<RelNode> allplans = root.buildAllPlans(this);
+    System.out.println("Total Number of Plans: " + allplans.size());
+    if (LOGGER.isLoggable(Level.FINE)) {
+      for(RelNode node : allplans) {
+        LOGGER.fine(
+            "Cheapest plan:\n"
+            + RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
+
+        LOGGER.fine("Provenance:\n"
+            + provenance(node));
+      }
+    }
+
+    // Using bucket sort
+    SortedMap<Integer, List<RelNode>> binned_plans
+      = new TreeMap<Integer, List<RelNode>>();
+    for(RelNode node: allplans) {
+      final RelMetadataQuery mq = RelMetadataQuery.instance();
+      Double c_cost = mq.getCumulativeCost(node).getRows();
+      System.out.println("Cost of random plan: " + c_cost);
+      // XXX We use integer values since double comparison might fail
+      Integer c_icost = c_cost.intValue();
+      if(!binned_plans.containsKey(c_icost)) {
+        binned_plans.put(c_icost, new ArrayList<RelNode>());
+      }
+      binned_plans.get(c_icost).add(node);
+    }
+
+    int i = 0;
+    SortedMap<Integer, RelNode> retval = new TreeMap<Integer, RelNode>();
+    for(Integer cost: binned_plans.keySet()) {
+      for(RelNode node: binned_plans.get(cost)) {
+        System.out.println("Cost of following plan: " + cost);
+        System.out.println(RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
+        retval.put(i++, node);
+        if(only_distinct)
+          break;
+      }
+    }
+    return retval;
+  }
+
+  // qoop
+  public RelNode findBestExp(int rank) {
+    System.out.println("QOOP: Volcano Optimizer finding best plan with rank: " + rank);
+    SortedMap<Integer, RelNode> allplans = findAllExp(false);
+    rank = (rank > allplans.size()) ? allplans.size() : rank;
+    return allplans.get(rank);
   }
 
   /** Ensures that the subset that is the root relational expression contains

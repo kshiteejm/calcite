@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.plan;
 
+// qoop
+import java.util.SortedMap;
+
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.metadata.CachingRelMetadataProvider;
 import org.apache.calcite.rel.metadata.RelMetadataProvider;
@@ -181,6 +184,22 @@ public interface RelOptPlanner {
    * @throws CannotPlanException if cannot find a plan
    */
   RelNode findBestExp();
+
+  // qoop
+  /** 
+   * Finds the n'th most efficient expression to implement this query.
+   *
+   * @throws CannoPlanException if cannot find a plan
+   */
+  RelNode findBestExp(int n);
+
+  // qoop
+  /**
+   * Finds the first n possible expressions to implement this query.
+   *
+   * @throws CannotPlanException if cannot find plans
+   */
+  SortedMap<Integer, RelNode> findAllExp(boolean only_distinct);
 
   /**
    * Returns the factory that creates

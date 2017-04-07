@@ -16,6 +16,10 @@
  */
 package org.apache.calcite.test;
 
+// qoop - begin import block
+import java.util.SortedMap;
+// end import block
+
 import org.apache.calcite.plan.AbstractRelOptPlanner;
 import org.apache.calcite.plan.RelOptCostImpl;
 import org.apache.calcite.plan.RelOptPlanner;
@@ -94,6 +98,16 @@ public class MockRelOptPlanner extends AbstractRelOptPlanner {
       matchRecursive(root, null, -1);
     }
     return root;
+  }
+
+  // qoop
+  public SortedMap<Integer, RelNode> findAllExp(boolean only_distinct) {
+    throw new CannotPlanException("MockRelOptPlanner does not implement finding all plans.");
+  }
+
+  // qoop
+  public RelNode findBestExp(int n) {
+    throw new CannotPlanException("MockRelOptPlanner does not implement finding all plans.");
   }
 
   /**

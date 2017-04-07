@@ -16,6 +16,9 @@
  */
 package org.apache.calcite.plan.hep;
 
+//qoop
+import java.util.SortedMap;
+
 import org.apache.calcite.linq4j.function.Function2;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.AbstractRelOptPlanner;
@@ -197,6 +200,16 @@ public class HepPlanner extends AbstractRelOptPlanner {
     collectGarbage();
 
     return buildFinalPlan(root);
+  }
+
+  // qoop
+  public RelNode findBestExp(int n) {
+    throw new CannotPlanException("HepPlanner doesn't implement finding n'th best expression.");
+  }
+
+  // qoop
+  public SortedMap<Integer, RelNode> findAllExp(boolean only_distinct) {
+    throw new CannotPlanException("HepPlanner doesn't implement finding all best expressions.");
   }
 
   private void executeProgram(HepProgram program) {
