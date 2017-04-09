@@ -888,7 +888,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
     for(RelNode node: allplans) {
       final RelMetadataQuery mq = RelMetadataQuery.instance();
       Double c_cost = mq.getCumulativeCost(node).getRows();
-      System.out.println("Cost of random plan: " + c_cost);
+      // System.out.println("Cost of random plan: " + c_cost);
       // XXX We use integer values since double comparison might fail
       Integer c_icost = c_cost.intValue();
       if(!binned_plans.containsKey(c_icost)) {
@@ -901,7 +901,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
     SortedMap<Integer, RelNode> retval = new TreeMap<Integer, RelNode>();
     for(Integer cost: binned_plans.keySet()) {
       for(RelNode node: binned_plans.get(cost)) {
-        System.out.println("Cost of following plan: " + cost);
+        System.out.println("Cost: " + cost);
         System.out.println(RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
         retval.put(i++, node);
         if(only_distinct)
