@@ -897,6 +897,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
       binned_plans.get(c_icost).add(node);
     }
 
+    System.out.println("QOOP: Total Number of Distinct Plans: " + binned_plans.size());
     int i = 0;
     SortedMap<Integer, RelNode> retval = new TreeMap<Integer, RelNode>();
     for(Integer cost: binned_plans.keySet()) {
@@ -914,7 +915,7 @@ public class VolcanoPlanner extends AbstractRelOptPlanner {
   // qoop
   public RelNode findBestExp(int rank) {
     System.out.println("QOOP: Volcano Optimizer finding best plan with rank: " + rank);
-    SortedMap<Integer, RelNode> allplans = findAllExp(false);
+    SortedMap<Integer, RelNode> allplans = findAllExp(true);
     rank = (rank > allplans.size()) ? allplans.size() : rank;
     return allplans.get(rank);
   }

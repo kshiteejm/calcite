@@ -331,7 +331,7 @@ public class RelSubset extends AbstractRelNode {
     // LOGGER.log(Level.INFO, "QOOP: Total Rels = " + replacer1.countRels(this));
 	// LOGGER.log(Level.INFO, "QOOP: Total plans = " + replacer1.getTotalPlans(this));
     System.out.println("QOOP: Total Rels = " + replacer1.countRels(this));
-    System.out.println("QOOP: Total Plans = " + replacer1.getTotalPlans(this));
+    // System.out.println("QOOP: Total Plans = " + replacer1.getTotalPlans(this));
     System.out.flush();
 
     final Set<RelNode> allplans = replacer1.visitAll(this);
