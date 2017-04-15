@@ -84,6 +84,7 @@ public class RelSubset extends AbstractRelNode {
 
   // qoop
   private static int MAX_PROJECT_DEPTH = 20;
+  private static int MAX_NUMBER_PLANS = 120;
 
   //~ Instance fields --------------------------------------------------------
 
