@@ -5,6 +5,7 @@ target
 settings.xml
 .classpath.txt
 .fullclasspath.txt
+.swp
 
 # eclipse
 .project
