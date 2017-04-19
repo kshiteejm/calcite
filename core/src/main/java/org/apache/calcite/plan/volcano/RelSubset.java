@@ -85,6 +85,7 @@ public class RelSubset extends AbstractRelNode {
   // qoop
   private static int MAX_PROJECT_DEPTH = 20;
   private static int MAX_NUMBER_PLANS = 120;
+  private static int MAX_EXPLORE_LIMIT = 10;
 
   //~ Instance fields --------------------------------------------------------
 
@@ -651,15 +652,17 @@ public class RelSubset extends AbstractRelNode {
 
     public Set<RelNode> visitAll(RelNode root) {
       System.out.println("Begin exhaustive search for all query plans.");
-      return exhaustiveSearch(root, new HashSet<RelNode>(), 0);
+      return exhaustiveSearch(root, new HashSet<RelNode>(), 0, 0);
     }
 
 
     public Set<RelNode> exhaustiveSearch(RelNode curr, final Set<RelNode> visited,
-        final int project_depth) {
+        final int project_depth, final int depth) {
       Set<RelNode> retval = new HashSet<RelNode>();
-      if(project_depth == MAX_PROJECT_DEPTH)
-        return retval;
+      if (depth == 30) 
+          return retval;
+      // if(project_depth == MAX_PROJECT_DEPTH)
+      //   return retval;
 
       List<RelNode> leads = new ArrayList<RelNode>();
       if(curr instanceof RelSubset) {
@@ -672,20 +675,27 @@ public class RelSubset extends AbstractRelNode {
 
       for (RelNode node: leads) { // each lead can have multiple ways of being realized
 
-        if(visited.contains(node) || node instanceof AbstractConverter) {
+        if(visited.contains(node)) {
+          continue; // do not pursue further
+        }
+
+        if(node instanceof AbstractConverter) {
+          visited.add(node);
           continue; // do not pursue further
         }
 
         Set<RelNode> duplicate = new HashSet<RelNode>(visited);
         duplicate.add(node);
+
+        int new_depth = depth + 1;
         // pursue this node and find different ways in which this node can be
         // realized
 
         int new_project_depth = project_depth;
-        if(node instanceof Project)
-          new_project_depth += 1;
-        else
-          new_project_depth = 0;
+        // if(node instanceof Project)
+        //   new_project_depth += 1;
+        // else
+        //   new_project_depth = 0;
 
         List<RelNode> oldInputs = node.getInputs();
         // Each input can be realized in multiple ways, thus the different
@@ -694,14 +704,19 @@ public class RelSubset extends AbstractRelNode {
 
         List<Set<RelNode>> oldInputRealizations = new ArrayList<Set<RelNode>>();
         for(RelNode old: oldInputs) {
-          oldInputRealizations.add(exhaustiveSearch(old, duplicate, new_project_depth));
+          oldInputRealizations.add(exhaustiveSearch(old, duplicate, new_project_depth, new_depth));
+          // System.out.println("Going from Depth: " + depth);
         }
         // now create the Cartesian product set
         Set<List<RelNode>> cart_product
           = Sets.cartesianProduct(oldInputRealizations);
-
+        
+        // System.out.println("Number of Plans: " + cart_product.size() + " at depth: " + depth);
+        int exploreLimit = 0;
         for(List<RelNode> candidate : cart_product) {
-          if(!candidate.equals(oldInputs)) {
+          if (!candidate.equals(oldInputs)) {
+            // if (exploreLimit++ > MAX_EXPLORE_LIMIT)
+            //   break;
             // System.out.println(RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
             // if (node instanceof AbstractConverter)
                 // System.out.println("Size of Candidate set: " + candidate.size());
@@ -712,6 +727,9 @@ public class RelSubset extends AbstractRelNode {
                 new VolcanoPlanner.DirectProvenance(node));
             retval.add(new_node);
           } else {
+            // this code-path is activated only for input tables
+            // System.out.println("SIMILAR PLAN?: " + depth);
+            // System.out.println(RelOptUtil.toString(node, SqlExplainLevel.ALL_ATTRIBUTES));
             retval.add(node);
           }
         }
